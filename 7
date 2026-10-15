@@ -1,0 +1,1310 @@
+local WindUI = loadstring(game:HttpGet("https://raw.githubusercontent.com/KingScriptAE/No-sirve-nada./refs/heads/main/main.lua"))()
+local FLOW_SPEED = 5.5
+local BORDER_THICKNESS = 1.7
+local FIXED_FONT = Enum.Font.SourceSansBold
+
+local BorderThemes = {
+    ["深蓝"] = ColorSequence.new({
+        ColorSequenceKeypoint.new(0.00, Color3.fromHex("0A1A3A")),
+        ColorSequenceKeypoint.new(0.25, Color3.fromHex("1E3A8A")),
+        ColorSequenceKeypoint.new(0.45, Color3.fromHex("2563EB")),
+        ColorSequenceKeypoint.new(0.55, Color3.fromHex("60A5FA")),
+        ColorSequenceKeypoint.new(0.75, Color3.fromHex("3B82F6")),
+        ColorSequenceKeypoint.new(1.00, Color3.fromHex("0A1A3A")),
+    }),
+    ["红色"] = ColorSequence.new({
+        ColorSequenceKeypoint.new(0.00, Color3.fromHex("1A0101")),
+        ColorSequenceKeypoint.new(0.25, Color3.fromHex("5A0A0A")),
+        ColorSequenceKeypoint.new(0.45, Color3.fromHex("C80000")),
+        ColorSequenceKeypoint.new(0.55, Color3.fromHex("FFFFFF")),
+        ColorSequenceKeypoint.new(0.75, Color3.fromHex("B02B2B")),
+        ColorSequenceKeypoint.new(1.00, Color3.fromHex("1F0303")),
+    }),
+    ["紫色"] = ColorSequence.new({
+        ColorSequenceKeypoint.new(0.00, Color3.fromHex("1A0A2A")),
+        ColorSequenceKeypoint.new(0.25, Color3.fromHex("4A1A8A")),
+        ColorSequenceKeypoint.new(0.45, Color3.fromHex("8B5CF6")),
+        ColorSequenceKeypoint.new(0.55, Color3.fromHex("D8B4FE")),
+        ColorSequenceKeypoint.new(0.75, Color3.fromHex("A855F7")),
+        ColorSequenceKeypoint.new(1.00, Color3.fromHex("1A0A2A")),
+    }),
+    ["绿色"] = ColorSequence.new({
+        ColorSequenceKeypoint.new(0.00, Color3.fromHex("0A1A0A")),
+        ColorSequenceKeypoint.new(0.25, Color3.fromHex("1A5A1A")),
+        ColorSequenceKeypoint.new(0.45, Color3.fromHex("22C55E")),
+        ColorSequenceKeypoint.new(0.55, Color3.fromHex("86EFAC")),
+        ColorSequenceKeypoint.new(0.75, Color3.fromHex("16A34A")),
+        ColorSequenceKeypoint.new(1.00, Color3.fromHex("0A1A0A")),
+    }),
+    ["金色"] = ColorSequence.new({
+        ColorSequenceKeypoint.new(0.00, Color3.fromHex("2A1A00")),
+        ColorSequenceKeypoint.new(0.25, Color3.fromHex("8A6A00")),
+        ColorSequenceKeypoint.new(0.45, Color3.fromHex("FFD700")),
+        ColorSequenceKeypoint.new(0.55, Color3.fromHex("FFF8B0")),
+        ColorSequenceKeypoint.new(0.75, Color3.fromHex("FFC107")),
+        ColorSequenceKeypoint.new(1.00, Color3.fromHex("2A1A00")),
+    }),
+    ["粉色"] = ColorSequence.new({
+        ColorSequenceKeypoint.new(0.00, Color3.fromHex("2A0A1A")),
+        ColorSequenceKeypoint.new(0.25, Color3.fromHex("8A1A5A")),
+        ColorSequenceKeypoint.new(0.45, Color3.fromHex("EC4899")),
+        ColorSequenceKeypoint.new(0.55, Color3.fromHex("FBCFE8")),
+        ColorSequenceKeypoint.new(0.75, Color3.fromHex("DB2777")),
+        ColorSequenceKeypoint.new(1.00, Color3.fromHex("2A0A1A")),
+    }),
+    ["青色"] = ColorSequence.new({
+        ColorSequenceKeypoint.new(0.00, Color3.fromHex("0A1A1A")),
+        ColorSequenceKeypoint.new(0.25, Color3.fromHex("0A5A5A")),
+        ColorSequenceKeypoint.new(0.45, Color3.fromHex("06B6D4")),
+        ColorSequenceKeypoint.new(0.55, Color3.fromHex("A5F3FC")),
+        ColorSequenceKeypoint.new(0.75, Color3.fromHex("0891B2")),
+        ColorSequenceKeypoint.new(1.00, Color3.fromHex("0A1A1A")),
+    }),
+}
+
+local currentTheme = BorderThemes["深蓝"]
+local WhiteFlowTheme = currentTheme
+local borderAnimation
+local borderInitialized = false
+
+function gradient(text, startColor, endColor)
+    local result = ""
+    local chars = {}
+    for uchar in text:gmatch("[%z\1-\127\194-\244][\128-\191]*") do
+        table.insert(chars, uchar)
+    end
+    local length = #chars
+    for i = 1, length do
+        local t = (i - 1) / math.max(length - 1, 1)
+        local r = startColor.R + (endColor.R - startColor.R) * t
+        local g = startColor.G + (endColor.G - startColor.G) * t
+        local b = startColor.B + (endColor.B - startColor.B) * t
+        result = result .. string.format('<font color="rgb(%d,%d,%d)">%s</font>', 
+            math.floor(r * 255), math.floor(g * 255), math.floor(b * 255), chars[i])
+    end
+    return result
+end
+
+local function StartFontEnforcer()
+    if not Window or not Window.UIElements then 
+        task.wait(1)
+        if not Window or not Window.UIElements then return end
+    end  
+    local MainFrame = Window.UIElements.Main
+    local function setFont(instance)
+        if instance:IsA("TextLabel") or instance:IsA("TextButton") or instance:IsA("TextBox") then
+            pcall(function() 
+                instance.Font = FIXED_FONT 
+                instance.RichText = true
+            end)
+        end
+    end
+    for _, child in ipairs(MainFrame:GetDescendants()) do
+        setFont(child)
+    end
+    MainFrame.DescendantAdded:Connect(function(child)
+        setFont(child)
+    end)
+end
+
+local function createBorder(window)
+    if not window or not window.UIElements then
+        task.wait(1)
+        if not window or not window.UIElements then return nil end
+    end
+    local mainFrame = window.UIElements.Main
+    if not mainFrame then return nil end    
+    if mainFrame:FindFirstChild("FlowBorder") then return mainFrame.FlowBorder end    
+    if not mainFrame:FindFirstChildOfClass("UICorner") then
+        local corner = Instance.new("UICorner")
+        corner.CornerRadius = UDim.new(0, 16)
+        corner.Parent = mainFrame
+    end    
+    local stroke = Instance.new("UIStroke")
+    stroke.Name = "FlowBorder"
+    stroke.Thickness = BORDER_THICKNESS
+    stroke.Color = Color3.new(1, 1, 1)
+    stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+    stroke.LineJoinMode = Enum.LineJoinMode.Round
+    stroke.Enabled = true
+    stroke.Parent = mainFrame    
+    local grad = Instance.new("UIGradient")
+    grad.Name = "StreamEffect"
+    grad.Color = WhiteFlowTheme
+    grad.Rotation = 0
+    grad.Parent = stroke    
+    return stroke
+end
+
+local function startBorderAnimation(window)
+    if not window or not window.UIElements then return nil end
+    local mainFrame = window.UIElements.Main
+    if not mainFrame then return nil end    
+    local stroke = mainFrame:FindFirstChild("FlowBorder")
+    if not stroke then return nil end    
+    local g2 = stroke:FindFirstChild("StreamEffect")
+    if not g2 then return nil end    
+    if borderAnimation then borderAnimation:Disconnect() borderAnimation = nil end    
+    local animation
+    animation = game:GetService("RunService").Heartbeat:Connect(function()
+        if not stroke or stroke.Parent == nil then
+            animation:Disconnect()
+            return
+        end
+        g2.Rotation = (tick() * FLOW_SPEED * 20) % 360
+    end)
+    borderAnimation = animation
+    return animation
+end
+
+Window = WindUI:CreateWindow({
+    Title = gradient("森林中的99夜", Color3.fromHex("#3B82F6"), Color3.fromHex("#60A5FA")), 
+    Author = gradient("作者:神之", Color3.fromHex("#2563EB"), Color3.fromHex("#93C5FD")),
+    IconThemed = true,
+    Folder = "Atomic",
+    Transparent = true,
+    Theme = "Dark",
+    SideBarWidth = 120,
+    HideSearchBar = false,
+    ScrollBarEnabled = true,
+    BackgroundImageTransparency = 0.55,
+    User = {
+        Enabled = true,
+        Anonymous = false,
+        Callback = function()
+        end
+    },
+})
+
+Window:EditOpenButton({
+    Title = "森林中的99夜",
+    CornerRadius = UDim.new(0,2),
+    StrokeThickness = 0.5
+})
+
+Window:Tag({
+    Title = "免费版",
+    Radius = 5,
+    Color = Color3.fromHex("#2563EB"),
+})
+
+Window:SetToggleKey(Enum.KeyCode.F, true)
+
+if not borderInitialized then
+    task.spawn(function()
+        task.wait(0.5) 
+        local stroke = createBorder(Window)
+        if stroke then
+            startBorderAnimation(Window)
+            borderInitialized = true
+        end
+        StartFontEnforcer()
+    end)
+end
+
+local originalOpenFunction = Window.Open
+Window.Open = function(...)
+    local result = originalOpenFunction(...)
+    if borderInitialized and not borderAnimation then
+        task.wait(0.1)
+        startBorderAnimation(Window)
+    end
+    return result
+end
+
+Window:OnClose(function()
+    if borderAnimation then
+        borderAnimation:Disconnect()
+        borderAnimation = nil
+    end
+end)
+
+local Tabs = {
+    Notice = Window:Tab({ Title = "公告", Icon = "megaphone" }),
+    Camera = Window:Tab({ Title = "相机", Icon = "camera" }),
+    ESP    = Window:Tab({ Title = "ESP", Icon = "eye" }),
+    TP     = Window:Tab({ Title = "传送", Icon = "map-pin" }),
+    Pull   = Window:Tab({ Title = "拉取物品", Icon = "package" }),
+    Hitbox = Window:Tab({ Title = "修改碰撞箱", Icon = "box" }),
+    Misc   = Window:Tab({ Title = "杂乱", Icon = "zap" }),
+    Settings = Window:Tab({ Title = "设置", Icon = "settings" })
+}
+
+-- ===== 公告 =====
+Tabs.Notice:Section({ Title = "公告" })
+Tabs.Notice:Paragraph({ Title = "欢迎使用", Desc = "森林中的99夜 - 免费版" })
+Tabs.Notice:Paragraph({ Title = "QQ群", Desc = "1126544677" })
+Tabs.Notice:Paragraph({ Title = "本脚本作者快手号", Desc = "5733022742" })
+
+-- ===== 相机 =====
+Tabs.Camera:Section({ Title = "视觉功能" })
+
+Tabs.Camera:Toggle({
+    Title = "夜视功能",
+    Default = false,
+    Callback = function(state)
+        if state then
+            game.Lighting.Ambient = Color3.fromRGB(160, 160, 160)
+            game.Lighting.OutdoorAmbient = Color3.fromRGB(160, 160, 160)
+            game.Lighting.Brightness = 3
+            game.Lighting.ClockTime = 14
+            game.Lighting.GlobalShadows = false
+        else
+            game.Lighting.Ambient = Color3.fromRGB(70, 70, 70)
+            game.Lighting.OutdoorAmbient = Color3.fromRGB(70, 70, 70)
+            game.Lighting.Brightness = 1
+            game.Lighting.GlobalShadows = true
+        end
+    end
+})
+
+Tabs.Camera:Slider({
+    Title = "夜视亮度",
+    Step = 0.1,
+    Value = { Min = 1, Max = 10, Default = 3 },
+    Callback = function(value)
+        game.Lighting.Brightness = value
+        local c = math.clamp(value / 10, 0, 1)
+        local color = Color3.fromRGB(255 * c, 255 * c, 255 * c)
+        game.Lighting.Ambient = color
+        game.Lighting.OutdoorAmbient = color
+    end
+})
+
+Tabs.Camera:Toggle({
+    Title = "除雾功能",
+    Default = false,
+    Callback = function(state)
+        if state then
+            game.Lighting.FogEnd = 100000
+            game.Lighting.FogStart = 100000
+        else
+            game.Lighting.FogEnd = 500
+            game.Lighting.FogStart = 100
+        end
+    end
+})
+
+-- ===== ESP 透视 =====
+local player = game.Players.LocalPlayer
+local RunService = game:GetService("RunService")
+local camera = workspace.CurrentCamera
+
+local ESP_MAX_DIST = 500
+
+-- 生物分类
+local espCategories = {
+    ["孩子"] = { keywords = {"dino", "koala", "kraken", "squid"}, color = Color3.fromRGB(255, 180, 255), enabled = false },
+    ["兔子"] = { keywords = {"bunny", "rabbit"}, color = Color3.fromRGB(255, 200, 200), enabled = false },
+    ["青蛙"] = { keywords = {"frog"}, color = Color3.fromRGB(0, 200, 0), enabled = false },
+    ["猕猴桃鸟"] = { keywords = {"kiwi"}, color = Color3.fromRGB(150, 100, 50), enabled = false },
+    ["北极狐"] = { keywords = {"arctic fox", "arcticfox"}, color = Color3.fromRGB(255, 150, 100), enabled = false },
+    ["狼"] = { keywords = {"wolf"}, color = Color3.fromRGB(255, 0, 0), enabled = false },
+    ["阿尔法狼"] = { keywords = {"alpha wolf", "alphawolf"}, color = Color3.fromRGB(255, 50, 50), enabled = false },
+    ["熊"] = { keywords = {"bear"}, color = Color3.fromRGB(255, 100, 0), enabled = false },
+    ["北极熊"] = { keywords = {"polar bear", "polarbear"}, color = Color3.fromRGB(200, 200, 255), enabled = false },
+    ["蝎子"] = { keywords = {"scorpion"}, color = Color3.fromRGB(150, 0, 0), enabled = false },
+    ["猛犸象"] = { keywords = {"mammoth"}, color = Color3.fromRGB(150, 100, 50), enabled = false },
+    ["邪教徒"] = { keywords = {"cultist", "cult"}, color = Color3.fromRGB(255, 0, 255), enabled = false },
+    ["外星人"] = { keywords = {"alien"}, color = Color3.fromRGB(0, 255, 255), enabled = false },
+    ["鹿怪"] = { keywords = {"the deer", "deer"}, color = Color3.fromRGB(255, 0, 100), enabled = false },
+    ["猫头鹰"] = { keywords = {"the owl", "owl"}, color = Color3.fromRGB(200, 200, 0), enabled = false },
+    ["公羊"] = { keywords = {"the ram", "ram"}, color = Color3.fromRGB(255, 100, 100), enabled = false },
+    ["蝙蝠"] = { keywords = {"the bat", "bat"}, color = Color3.fromRGB(100, 0, 100), enabled = false },
+    ["猫怪"] = { keywords = {"the cat", "cat"}, color = Color3.fromRGB(200, 100, 50), enabled = false },
+    ["物品"] = { keywords = {}, color = Color3.fromRGB(0, 255, 100), enabled = false },
+}
+
+local function getPos(obj)
+    if obj:IsA("Model") then
+        local prim = obj.PrimaryPart or obj:FindFirstChildWhichIsA("BasePart")
+        if prim then return prim.Position end
+    elseif obj:IsA("BasePart") then
+        return obj.Position
+    end
+    return nil
+end
+
+local function isSmallItem(obj)
+    if obj:IsA("Model") and obj:FindFirstChildOfClass("Humanoid") then return false end
+    local size
+    if obj:IsA("Model") then
+        local prim = obj.PrimaryPart or obj:FindFirstChildWhichIsA("BasePart")
+        if not prim then return false end
+        size = prim.Size
+    elseif obj:IsA("BasePart") then
+        if obj.Anchored then return false end
+        size = obj.Size
+    else
+        return false
+    end
+    return size.X <= 8 and size.Y <= 8 and size.Z <= 8
+end
+
+-- ===== 玩家 ESP：2D 屏幕方框（穿墙可见）=====
+local playerESPEnabled = false
+local playerESPDrawings = {}  -- [角色] = {gui, box, nameLabel}
+
+-- 创建一套屏幕 GUI（每帧更新位置和大小）
+local function createPlayerESPGui(charName)
+    local gui = Instance.new("ScreenGui")
+    gui.Name = "ESP_" .. charName
+    gui.ResetOnSpawn = false
+    gui.IgnoreGuiInset = true
+    gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+    gui.DisplayOrder = 999
+    gui.Parent = game:GetService("CoreGui")
+
+    -- 用 4 条 Frame 拼一个方框（每个 Frame 是边框的一条边）
+    local top = Instance.new("Frame")
+    top.Name = "Top"
+    top.BackgroundColor3 = Color3.fromRGB(255, 255, 0)
+    top.BorderSizePixel = 0
+    top.Parent = gui
+
+    local bottom = Instance.new("Frame")
+    bottom.Name = "Bottom"
+    bottom.BackgroundColor3 = Color3.fromRGB(255, 255, 0)
+    bottom.BorderSizePixel = 0
+    bottom.Parent = gui
+
+    local left = Instance.new("Frame")
+    left.Name = "Left"
+    left.BackgroundColor3 = Color3.fromRGB(255, 255, 0)
+    left.BorderSizePixel = 0
+    left.Parent = gui
+
+    local right = Instance.new("Frame")
+    right.Name = "Right"
+    right.BackgroundColor3 = Color3.fromRGB(255, 255, 0)
+    right.BorderSizePixel = 0
+    right.Parent = gui
+
+    -- 名字 + 距离
+    local nameLabel = Instance.new("TextLabel")
+    nameLabel.Name = "Name"
+    nameLabel.BackgroundTransparency = 1
+    nameLabel.TextColor3 = Color3.fromRGB(255, 255, 0)
+    nameLabel.TextStrokeTransparency = 0
+    nameLabel.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
+    nameLabel.Font = Enum.Font.SourceSansBold
+    nameLabel.TextSize = 14
+    nameLabel.TextXAlignment = Enum.TextXAlignment.Center
+    nameLabel.Text = charName
+    nameLabel.Parent = gui
+
+    return { gui = gui, top = top, bottom = bottom, left = left, right = right, nameLabel = nameLabel }
+end
+
+-- 销毁
+local function removePlayerESPGui(char)
+    if playerESPDrawings[char] then
+        local data = playerESPDrawings[char]
+        if data.gui and data.gui.Parent then
+            data.gui:Destroy()
+        end
+        playerESPDrawings[char] = nil
+    end
+end
+
+-- 判断点是否可见
+local function isVisible(pos)
+    local _, onScreen = camera:WorldToViewportPoint(pos)
+    return onScreen
+end
+
+-- 玩家 ESP 循环
+local playerESPLoop = nil
+
+local function startPlayerESP()
+    if playerESPLoop then return end
+    playerESPLoop = RunService.RenderStepped:Connect(function()
+        if not playerESPEnabled then return end
+
+        local myChar = player.Character
+        if not myChar then return end
+        local myRoot = myChar:FindFirstChild("HumanoidRootPart")
+        if not myRoot then return end
+        local myPos = myRoot.Position
+
+        local aliveChars = {}
+
+        for _, plr in pairs(game.Players:GetPlayers()) do
+            if plr ~= player and plr.Character then
+                local char = plr.Character
+                local root = char:FindFirstChild("HumanoidRootPart")
+                local hum = char:FindFirstChildOfClass("Humanoid")
+                if root and hum and hum.Health > 0 then
+                    local dist = (root.Position - myPos).Magnitude
+                    if dist < ESP_MAX_DIST then
+                        aliveChars[char] = true
+
+                        -- 创建 GUI（如果还没有）
+                        local data = playerESPDrawings[char]
+                        if not data then
+                            data = createPlayerESPGui(plr.Name)
+                            playerESPDrawings[char] = data
+                        end
+
+                        -- 计算屏幕上玩家的屏幕位置和大小
+                        local topLeft, topOnScreen = camera:WorldToViewportPoint(root.Position + Vector3.new(0, 3, 0))
+                        local bottomRight, bottomOnScreen = camera:WorldToViewportPoint(root.Position - Vector3.new(0, 3, 0))
+                        local center, centerOnScreen = camera:WorldToViewportPoint(root.Position)
+
+                        -- 距离越远框越小
+                        local size = 1200 / dist  -- 经验值，距离 12 格左右时大小约 100
+                        local width = size
+                        local height = size * 1.6
+
+                        -- 计算矩形位置（屏幕坐标，以中心为准）
+                        local x = center.X - width / 2
+                        local y = center.Y - height / 2
+
+                        -- 如果不在屏幕上，隐藏（或者你也可以让它一直显示，但会跑到屏幕外）
+                        if centerOnScreen then
+                            -- 4 条边框
+                            data.top.Position = UDim2.new(0, x, 0, y)
+                            data.top.Size = UDim2.new(0, width, 0, 2)
+                            data.top.Visible = true
+
+                            data.bottom.Position = UDim2.new(0, x, 0, y + height)
+                            data.bottom.Size = UDim2.new(0, width, 0, 2)
+                            data.bottom.Visible = true
+
+                            data.left.Position = UDim2.new(0, x, 0, y)
+                            data.left.Size = UDim2.new(0, 2, 0, height)
+                            data.left.Visible = true
+
+                            data.right.Position = UDim2.new(0, x + width, 0, y)
+                            data.right.Size = UDim2.new(0, 2, 0, height)
+                            data.right.Visible = true
+
+                            -- 名字 + 距离（框上方）
+                            data.nameLabel.Position = UDim2.new(0, x - 30, 0, y - 18)
+                            data.nameLabel.Size = UDim2.new(0, width + 60, 0, 16)
+                            data.nameLabel.Text = plr.Name .. " [" .. math.floor(dist) .. "]"
+                            data.nameLabel.Visible = true
+                        else
+                            -- 屏幕外，隐藏
+                            data.top.Visible = false
+                            data.bottom.Visible = false
+                            data.left.Visible = false
+                            data.right.Visible = false
+                            data.nameLabel.Visible = false
+                        end
+                    end
+                end
+            end
+        end
+
+        -- 清理不需要显示的
+        for ch, _ in pairs(playerESPDrawings) do
+            if not aliveChars[ch] or not ch.Parent then
+                removePlayerESPGui(ch)
+            end
+        end
+    end)
+end
+
+local function stopPlayerESP()
+    if playerESPLoop then
+        playerESPLoop:Disconnect()
+        playerESPLoop = nil
+    end
+    for ch, _ in pairs(playerESPDrawings) do
+        removePlayerESPGui(ch)
+    end
+    playerESPDrawings = {}
+end
+
+-- ===== 其他生物 ESP（Billboard 文字）=====
+local espLabels = {}
+
+local function createESPLabel(obj, text, color)
+    local data = espLabels[obj]
+    if not data then
+        local billboard = Instance.new("BillboardGui")
+        billboard.Name = "ESP_Label"
+        billboard.Size = UDim2.new(0, 60, 0, 14)
+        billboard.AlwaysOnTop = true
+        billboard.StudsOffset = Vector3.new(0, 2, 0)
+        billboard.Adornee = obj
+        billboard.Parent = obj
+
+        local label = Instance.new("TextLabel")
+        label.Size = UDim2.new(1, 0, 1, 0)
+        label.BackgroundTransparency = 1
+        label.TextColor3 = color
+        label.TextStrokeTransparency = 0
+        label.TextScaled = true
+        label.Font = Enum.Font.SourceSansBold
+        label.Text = text
+        label.Parent = billboard
+
+        espLabels[obj] = { billboard = billboard, textLabel = label }
+    else
+        if data.textLabel then
+            data.textLabel.Text = text
+            data.textLabel.TextColor3 = color
+        end
+    end
+end
+
+local function getObjectCategory(obj)
+    local name = obj.Name:lower()
+    for catName, data in pairs(espCategories) do
+        if data.enabled and catName ~= "物品" then
+            for _, kw in ipairs(data.keywords) do
+                if name:find(kw) then
+                    return catName, obj.Name, data.color
+                end
+            end
+        end
+    end
+    if espCategories["物品"].enabled and isSmallItem(obj) then
+        return "物品", obj.Name, espCategories["物品"].color
+    end
+    return nil
+end
+
+local espConnection = nil
+local lastUpdate = 0
+
+local function startESP()
+    if espConnection then return end
+    espConnection = RunService.Heartbeat:Connect(function()
+        local now = tick()
+        if now - lastUpdate < 0.05 then return end
+        lastUpdate = now
+
+        local char = player.Character
+        if not char then return end
+        local root = char:FindFirstChild("HumanoidRootPart")
+        if not root then return end
+        local myPos = root.Position
+
+        local anyEnabled = false
+        for _, v in pairs(espCategories) do
+            if v.enabled then anyEnabled = true break end
+        end
+
+        if not anyEnabled then
+            for obj, data in pairs(espLabels) do
+                if data.billboard and data.billboard.Parent then data.billboard:Destroy() end
+            end
+            espLabels = {}
+            return
+        end
+
+        local currentObjects = {}
+        for _, obj in pairs(workspace:GetDescendants()) do
+            if obj:IsA("Model") or obj:IsA("BasePart") then
+                local pos = getPos(obj)
+                if pos then
+                    local dist = (pos - myPos).Magnitude
+                    if dist < ESP_MAX_DIST then
+                        local cat, text, color = getObjectCategory(obj)
+                        if cat then
+                            currentObjects[obj] = true
+                            createESPLabel(obj, cat .. " [" .. math.floor(dist) .. "]", color)
+                        end
+                    end
+                end
+            end
+        end
+
+        for obj, data in pairs(espLabels) do
+            if not currentObjects[obj] or not obj.Parent then
+                if data.billboard and data.billboard.Parent then data.billboard:Destroy() end
+                espLabels[obj] = nil
+            end
+        end
+    end)
+end
+
+local function stopESP()
+    if espConnection then espConnection:Disconnect() espConnection = nil end
+    for obj, data in pairs(espLabels) do
+        if data.billboard and data.billboard.Parent then data.billboard:Destroy() end
+    end
+    espLabels = {}
+end
+
+Tabs.ESP:Section({ Title = "透视设置" })
+Tabs.ESP:Paragraph({ Title = "距离限制", Desc = "只显示 " .. ESP_MAX_DIST .. " 格内的物体" })
+
+Tabs.ESP:Toggle({
+    Title = "透视 玩家（2D 方框）",
+    Default = false,
+    Callback = function(s)
+        playerESPEnabled = s
+        if s then
+            startPlayerESP()
+            print("[ESP] 玩家 2D 方框已开启")
+        else
+            stopPlayerESP()
+            print("[ESP] 玩家 2D 方框已关闭")
+        end
+    end
+})
+
+Tabs.ESP:Toggle({ Title = "透视 孩子", Default = false, Callback = function(s) espCategories["孩子"].enabled = s if s then startESP() end end })
+
+Tabs.ESP:Divider()
+Tabs.ESP:Section({ Title = "被动生物" })
+Tabs.ESP:Toggle({ Title = "透视 兔子", Default = false, Callback = function(s) espCategories["兔子"].enabled = s if s then startESP() end end })
+Tabs.ESP:Toggle({ Title = "透视 青蛙", Default = false, Callback = function(s) espCategories["青蛙"].enabled = s if s then startESP() end end })
+Tabs.ESP:Toggle({ Title = "透视 猕猴桃鸟", Default = false, Callback = function(s) espCategories["猕猴桃鸟"].enabled = s if s then startESP() end end })
+Tabs.ESP:Toggle({ Title = "透视 北极狐", Default = false, Callback = function(s) espCategories["北极狐"].enabled = s if s then startESP() end end })
+
+Tabs.ESP:Divider()
+Tabs.ESP:Section({ Title = "敌对生物" })
+Tabs.ESP:Toggle({ Title = "透视 狼", Default = false, Callback = function(s) espCategories["狼"].enabled = s if s then startESP() end end })
+Tabs.ESP:Toggle({ Title = "透视 阿尔法狼", Default = false, Callback = function(s) espCategories["阿尔法狼"].enabled = s if s then startESP() end end })
+Tabs.ESP:Toggle({ Title = "透视 熊", Default = false, Callback = function(s) espCategories["熊"].enabled = s if s then startESP() end end })
+Tabs.ESP:Toggle({ Title = "透视 北极熊", Default = false, Callback = function(s) espCategories["北极熊"].enabled = s if s then startESP() end end })
+Tabs.ESP:Toggle({ Title = "透视 蝎子", Default = false, Callback = function(s) espCategories["蝎子"].enabled = s if s then startESP() end end })
+Tabs.ESP:Toggle({ Title = "透视 猛犸象", Default = false, Callback = function(s) espCategories["猛犸象"].enabled = s if s then startESP() end end })
+
+Tabs.ESP:Divider()
+Tabs.ESP:Section({ Title = "特殊敌人" })
+Tabs.ESP:Toggle({ Title = "透视 邪教徒", Default = false, Callback = function(s) espCategories["邪教徒"].enabled = s if s then startESP() end end })
+Tabs.ESP:Toggle({ Title = "透视 外星人", Default = false, Callback = function(s) espCategories["外星人"].enabled = s if s then startESP() end end })
+Tabs.ESP:Toggle({ Title = "透视 鹿怪", Default = false, Callback = function(s) espCategories["鹿怪"].enabled = s if s then startESP() end end })
+Tabs.ESP:Toggle({ Title = "透视 猫头鹰", Default = false, Callback = function(s) espCategories["猫头鹰"].enabled = s if s then startESP() end end })
+Tabs.ESP:Toggle({ Title = "透视 公羊", Default = false, Callback = function(s) espCategories["公羊"].enabled = s if s then startESP() end end })
+Tabs.ESP:Toggle({ Title = "透视 蝙蝠", Default = false, Callback = function(s) espCategories["蝙蝠"].enabled = s if s then startESP() end end })
+Tabs.ESP:Toggle({ Title = "透视 猫怪", Default = false, Callback = function(s) espCategories["猫怪"].enabled = s if s then startESP() end end })
+
+Tabs.ESP:Divider()
+Tabs.ESP:Section({ Title = "物品透视" })
+Tabs.ESP:Toggle({ Title = "透视物品", Default = false, Callback = function(s) espCategories["物品"].enabled = s if s then startESP() end end })
+
+Tabs.ESP:Divider()
+Tabs.ESP:Button({
+    Title = "关闭所有透视",
+    Callback = function()
+        playerESPEnabled = false
+        stopPlayerESP()
+        for _, v in pairs(espCategories) do v.enabled = false end
+        stopESP()
+        print("[ESP] 已关闭所有透视")
+    end
+})
+
+-- ===== 传送 =====
+local function teleportTo(pos)
+    local char = player.Character
+    if not char then return false end
+    local root = char:FindFirstChild("HumanoidRootPart")
+    if not root then return false end
+    root.CFrame = CFrame.new(pos + Vector3.new(0, 3, 0))
+    return true
+end
+
+local function findSpawn()
+    for _, obj in pairs(workspace:GetDescendants()) do
+        if obj:IsA("SpawnLocation") then
+            return obj.Position
+        end
+    end
+    return nil
+end
+
+Tabs.TP:Section({ Title = "传送功能" })
+
+Tabs.TP:Button({
+    Title = "🏠 传送回出生点（篝火）",
+    Callback = function()
+        local pos = findSpawn()
+        if pos then
+            teleportTo(pos)
+            print("[传送] 已传送到出生点")
+        else
+            print("[传送] 找不到出生点")
+        end
+    end
+})
+
+-- ===== 拉取物品 =====
+local pullTarget = "玩家"
+local maxPullCount = 100
+
+local CATEGORY_DATA = {
+    Fuel = {
+        ["全部"] = "__ALL__",
+        ["木头"] = "Log",
+        ["废金属"] = "Scrap",
+        ["树枝"] = "Stick",
+        ["煤炭"] = "Coal",
+    },
+    Medicine = {
+        ["全部"] = "__ALL__",
+        ["绷带"] = "Bandage",
+        ["医疗包"] = "Medkit",
+    },
+    Food = {
+        ["全部"] = "__ALL__",
+        ["胡萝卜"] = "Carrot",
+        ["苹果"] = "Apple",
+        ["浆果"] = "Berry",
+        ["蛋糕"] = "Cake",
+        ["玉米"] = "Corn",
+        ["南瓜"] = "Pumpkin",
+        ["肉块"] = "Morsel",
+        ["牛排"] = "Steak",
+        ["肋排"] = "Ribs",
+        ["炖菜"] = "Stew",
+        ["丰盛炖菜"] = "Hearty Stew",
+        ["辣椒"] = "Chili",
+        ["肉三明治"] = "Meat Sandwich",
+        ["海鲜浓汤"] = "Seafood Chowder",
+        ["牛排晚餐"] = "Steak Dinner",
+        ["南瓜汤"] = "Pumpkin Soup",
+        ["BBQ肋排"] = "BBQ Ribs",
+        ["胡萝卜蛋糕"] = "Carrot Cake",
+        ["鲭鱼"] = "Mackerel",
+        ["鲑鱼"] = "Salmon",
+        ["小丑鱼"] = "Clownfish",
+        ["水母"] = "Jellyfish",
+        ["红点鲑"] = "Char",
+        ["鳗鱼"] = "Eel",
+        ["剑鱼"] = "Swordfish",
+        ["鲨鱼"] = "Shark",
+    },
+    Material = {
+        ["全部"] = "__ALL__",
+        ["兔脚"] = "Bunny Foot",
+        ["兔皮"] = "Bunny Pelt",
+        ["狼皮"] = "Wolf Pelt",
+        ["金碎片"] = "Gold Fragment",
+        ["流星碎片"] = "Meteor Shard",
+    },
+    Weapon = {
+        ["全部"] = "__ALL__",
+        ["老斧头"] = "Old Axe",
+        ["好斧头"] = "Good Axe",
+        ["强斧头"] = "Strong Axe",
+        ["电锯"] = "Chainsaw",
+        ["长矛"] = "Spear",
+        ["武士刀"] = "Katana",
+        ["晨星锤"] = "Morningstar",
+        ["激光剑"] = "Laser Sword",
+        ["冰剑"] = "Ice Sword",
+        ["三叉戟"] = "Trident",
+        ["毒矛"] = "Poison Spear",
+        ["地狱剑"] = "Infernal Sword",
+        ["吹箭筒"] = "Blowpipe",
+        ["镰刀"] = "Scythe",
+        ["左轮手枪"] = "Revolver",
+        ["步枪"] = "Rifle",
+        ["战术霰弹枪"] = "Tactical Shotgun",
+        ["射线枪"] = "Ray Gun",
+    },
+    Tool = {
+        ["全部"] = "__ALL__",
+        ["镐"] = "Pickaxe",
+        ["锤子"] = "Hammer",
+        ["锯子"] = "Saw",
+        ["桶"] = "Bucket",
+        ["灯笼"] = "Lantern",
+    },
+}
+
+local function isPlayer(obj)
+    for _, plr in pairs(game.Players:GetPlayers()) do
+        if plr.Character and (obj == plr.Character or obj:IsDescendantOf(plr.Character)) then
+            return true
+        end
+    end
+    return false
+end
+
+local function isHumanoid(obj)
+    if obj:IsA("Model") and obj:FindFirstChildOfClass("Humanoid") then return true end
+    local name = obj.Name:lower()
+    local humanoidNames = {"cultist", "zombie", "wolf", "bear", "deer", "rabbit", "fox", "npc", "monster", "player", "skeleton", "ghost", "spider", "snake", "boar", "animal", "mob"}
+    for _, kw in ipairs(humanoidNames) do
+        if name:find(kw) then return true end
+    end
+    return false
+end
+
+local function isBigModel(obj)
+    if obj:IsA("Model") then
+        local prim = obj.PrimaryPart or obj:FindFirstChildWhichIsA("BasePart")
+        if prim then
+            local s = prim.Size
+            if s.X > 8 or s.Y > 8 or s.Z > 8 then return true end
+        end
+    end
+    return false
+end
+
+local function isSafeItem(obj)
+    if isPlayer(obj) then return false end
+    if isHumanoid(obj) then return false end
+    if isBigModel(obj) then return false end
+    return true
+end
+
+local function getDisplayList(cat)
+    local list = {}
+    for k, _ in pairs(CATEGORY_DATA[cat]) do table.insert(list, k) end
+    table.sort(list)
+    for i, v in ipairs(list) do
+        if v == "全部" then
+            table.remove(list, i)
+            table.insert(list, 1, "全部")
+            break
+        end
+    end
+    return list
+end
+
+local function getTargetPosition()
+    if pullTarget == "玩家" then
+        local char = player.Character
+        if not char then return nil end
+        local root = char:FindFirstChild("HumanoidRootPart")
+        if not root then return nil end
+        return root.Position + Vector3.new(0, 3, 0)
+    end
+    if pullTarget == "火堆" then
+        local pos = findSpawn()
+        if pos then return pos + Vector3.new(0, 3, 0) end
+    end
+    if pullTarget == "工作台" then
+        for _, obj in pairs(workspace:GetDescendants()) do
+            local n = obj.Name:lower()
+            if n:find("workbench") or n:find("craft") then
+                local pos = getPos(obj)
+                if pos then return pos + Vector3.new(0, 3, 0) end
+            end
+        end
+    end
+    local char = player.Character
+    if char and char:FindFirstChild("HumanoidRootPart") then
+        return char.HumanoidRootPart.Position + Vector3.new(0, 3, 0)
+    end
+    return nil
+end
+
+local function convertToEnglish(cat, selected)
+    local result = {}
+    for _, name in ipairs(selected) do
+        if name == "全部" then
+            for k, v in pairs(CATEGORY_DATA[cat]) do
+                if k ~= "全部" and v ~= "__ALL__" then table.insert(result, v) end
+            end
+        else
+            local eng = CATEGORY_DATA[cat][name]
+            if eng and eng ~= "__ALL__" then table.insert(result, eng) end
+        end
+    end
+    return result
+end
+
+local function bringToTarget(obj, targetPos)
+    pcall(function()
+        if obj:IsA("Model") then
+            obj:PivotTo(CFrame.new(targetPos))
+        elseif obj:IsA("BasePart") then
+            obj.CFrame = CFrame.new(targetPos)
+        end
+    end)
+end
+
+local function tryServerMove(obj, pos)
+    local remoteNames = {"Pickup", "Grab", "TakeItem", "MoveItem", "DropItem", "PickupItem", "Interact", "Use"}
+    for _, remoteName in ipairs(remoteNames) do
+        local remote = game:GetService("ReplicatedStorage"):FindFirstChild(remoteName, true)
+        if remote and remote:IsA("RemoteEvent") then
+            pcall(function() remote:FireServer(obj) end)
+        end
+    end
+end
+
+function pullItems(cat, selected)
+    if not selected or #selected == 0 then
+        print("[" .. cat .. "] 请先选择物品")
+        return
+    end
+    local englishList = convertToEnglish(cat, selected)
+    if #englishList == 0 then return end
+    local targetPos = getTargetPosition()
+    if not targetPos then return end
+
+    local count = 0
+    for _, obj in pairs(workspace:GetDescendants()) do
+        if count >= maxPullCount then break end
+        if (obj:IsA("Model") or obj:IsA("Part") or obj:IsA("MeshPart")) and isSafeItem(obj) then
+            local matched = false
+            for _, want in ipairs(englishList) do
+                if obj.Name == want or obj.Name:lower() == want:lower() then
+                    matched = true
+                    break
+                end
+            end
+            if matched then
+                tryServerMove(obj, targetPos)
+                bringToTarget(obj, targetPos)
+                count = count + 1
+            end
+        end
+    end
+    print("[" .. cat .. "] 拉取完成，共 " .. count .. " 个")
+end
+
+Tabs.Pull:Section({ Title = "拉取设置" })
+Tabs.Pull:Paragraph({ Title = "拉取位置", Desc = "当前：玩家" })
+Tabs.Pull:Button({ Title = "📍 传送到：玩家", Callback = function() pullTarget = "玩家" print("已切换：玩家") end })
+Tabs.Pull:Button({ Title = "🔥 传送到：火堆", Callback = function() pullTarget = "火堆" print("已切换：火堆") end })
+Tabs.Pull:Button({ Title = "🛠️ 传送到：工作台", Callback = function() pullTarget = "工作台" print("已切换：工作台") end })
+Tabs.Pull:Slider({
+    Title = "最大拉取数量",
+    Step = 1,
+    Value = { Min = 1, Max = 1000, Default = 100 },
+    Callback = function(value) maxPullCount = math.floor(value) end
+})
+
+Tabs.Pull:Divider()
+local selectedPerCategory = { Fuel = {}, Medicine = {}, Food = {}, Material = {}, Weapon = {}, Tool = {} }
+
+Tabs.Pull:Section({ Title = "💊 药物" })
+Tabs.Pull:Dropdown({ Title = "选择药物", Values = getDisplayList("Medicine"), Value = {}, Multi = true, AllowNone = true, Callback = function(sel) selectedPerCategory.Medicine = sel end })
+Tabs.Pull:Button({ Title = "拉取药物", Callback = function() pullItems("Medicine", selectedPerCategory.Medicine) end })
+
+Tabs.Pull:Section({ Title = "🔥 燃料" })
+Tabs.Pull:Dropdown({ Title = "选择燃料", Values = getDisplayList("Fuel"), Value = {}, Multi = true, AllowNone = true, Callback = function(sel) selectedPerCategory.Fuel = sel end })
+Tabs.Pull:Button({ Title = "拉取燃料", Callback = function() pullItems("Fuel", selectedPerCategory.Fuel) end })
+
+Tabs.Pull:Section({ Title = "🍖 食物" })
+Tabs.Pull:Dropdown({ Title = "选择食物", Values = getDisplayList("Food"), Value = {}, Multi = true, AllowNone = true, Callback = function(sel) selectedPerCategory.Food = sel end })
+Tabs.Pull:Button({ Title = "拉取食物", Callback = function() pullItems("Food", selectedPerCategory.Food) end })
+
+Tabs.Pull:Section({ Title = "🧵 材料" })
+Tabs.Pull:Dropdown({ Title = "选择材料", Values = getDisplayList("Material"), Value = {}, Multi = true, AllowNone = true, Callback = function(sel) selectedPerCategory.Material = sel end })
+Tabs.Pull:Button({ Title = "拉取材料", Callback = function() pullItems("Material", selectedPerCategory.Material) end })
+
+Tabs.Pull:Section({ Title = "🔫 武器" })
+Tabs.Pull:Dropdown({ Title = "选择武器", Values = getDisplayList("Weapon"), Value = {}, Multi = true, AllowNone = true, Callback = function(sel) selectedPerCategory.Weapon = sel end })
+Tabs.Pull:Button({ Title = "拉取武器", Callback = function() pullItems("Weapon", selectedPerCategory.Weapon) end })
+
+Tabs.Pull:Section({ Title = "🛠️ 工具" })
+Tabs.Pull:Dropdown({ Title = "选择工具", Values = getDisplayList("Tool"), Value = {}, Multi = true, AllowNone = true, Callback = function(sel) selectedPerCategory.Tool = sel end })
+Tabs.Pull:Button({ Title = "拉取工具", Callback = function() pullItems("Tool", selectedPerCategory.Tool) end })
+
+-- ===== 修改碰撞箱 =====
+local hitboxEnabled = false
+local hitboxScale = 2
+local hitboxConnection = nil
+local originalSizes = {}
+
+local function isPlayerChar2(obj)
+    for _, plr in pairs(game.Players:GetPlayers()) do
+        if plr.Character and (obj == plr.Character or obj:IsDescendantOf(plr.Character)) then
+            return true
+        end
+    end
+    return false
+end
+
+local function isMonsterOrAnimal(obj)
+    if obj:IsA("Model") and obj:FindFirstChildOfClass("Humanoid") then
+        if isPlayerChar2(obj) then return false end
+        return true
+    end
+    return false
+end
+
+local function setHitbox(obj, scale)
+    if not obj or not obj:IsA("Model") then return end
+    for _, part in ipairs(obj:GetDescendants()) do
+        if part:IsA("BasePart") and part.Name ~= "HumanoidRootPart" then
+            if not originalSizes[part] then
+                originalSizes[part] = part.Size
+            end
+            local orig = originalSizes[part]
+            part.Size = Vector3.new(orig.X * scale, orig.Y * scale, orig.Z * scale)
+        end
+    end
+end
+
+local function startHitboxLoop()
+    if hitboxConnection then return end
+    hitboxConnection = RunService.Heartbeat:Connect(function()
+        if not hitboxEnabled then return end
+        for _, obj in pairs(workspace:GetDescendants()) do
+            if isMonsterOrAnimal(obj) then
+                setHitbox(obj, hitboxScale)
+            end
+        end
+    end)
+end
+
+local function stopHitboxLoop()
+    if hitboxConnection then hitboxConnection:Disconnect() hitboxConnection = nil end
+    for part, origSize in pairs(originalSizes) do
+        if part and part.Parent then
+            pcall(function() part.Size = origSize end)
+        end
+    end
+    originalSizes = {}
+end
+
+Tabs.Hitbox:Section({ Title = "碰撞箱设置" })
+Tabs.Hitbox:Paragraph({ Title = "说明", Desc = "扩大怪物和动物的碰撞箱，方便击中" })
+
+Tabs.Hitbox:Toggle({
+    Title = "开启碰撞箱放大",
+    Default = false,
+    Callback = function(s)
+        hitboxEnabled = s
+        if s then
+            startHitboxLoop()
+            print("[碰撞箱] 已开启，倍数：" .. hitboxScale)
+        else
+            stopHitboxLoop()
+            print("[碰撞箱] 已关闭，恢复原大小")
+        end
+    end
+})
+
+Tabs.Hitbox:Slider({
+    Title = "碰撞箱倍数",
+    Step = 0.5,
+    Value = { Min = 1, Max = 10, Default = 2 },
+    Callback = function(value)
+        hitboxScale = value
+        if hitboxEnabled then
+            for part, origSize in pairs(originalSizes) do
+                if part and part.Parent then
+                    pcall(function()
+                        part.Size = Vector3.new(origSize.X * hitboxScale, origSize.Y * hitboxScale, origSize.Z * hitboxScale)
+                    end)
+                end
+            end
+        end
+    end
+})
+
+Tabs.Hitbox:Divider()
+Tabs.Hitbox:Button({
+    Title = "🔄 立即刷新碰撞箱",
+    Callback = function()
+        if not hitboxEnabled then
+            print("[碰撞箱] 请先开启碰撞箱放大")
+            return
+        end
+        for _, obj in pairs(workspace:GetDescendants()) do
+            if isMonsterOrAnimal(obj) then
+                setHitbox(obj, hitboxScale)
+            end
+        end
+        print("[碰撞箱] 已刷新")
+    end
+})
+
+-- ===== 杂乱 =====
+Tabs.Misc:Section({ Title = "画质设置" })
+
+Tabs.Misc:Button({
+    Title = "🌟 一键提高画质",
+    Callback = function()
+        pcall(function()
+            game.Lighting.Brightness = 3
+            game.Lighting.ClockTime = 14
+            game.Lighting.GlobalShadows = true
+            game.Lighting.Ambient = Color3.fromRGB(120, 120, 120)
+            game.Lighting.OutdoorAmbient = Color3.fromRGB(120, 120, 120)
+            game.Lighting.FogEnd = 100000
+            game.Lighting.FogStart = 100000
+        end)
+        print("[杂乱] 画质已提升")
+    end
+})
+
+Tabs.Misc:Button({
+    Title = "🌙 恢复默认画质",
+    Callback = function()
+        pcall(function()
+            game.Lighting.Brightness = 1
+            game.Lighting.GlobalShadows = true
+            game.Lighting.Ambient = Color3.fromRGB(70, 70, 70)
+            game.Lighting.OutdoorAmbient = Color3.fromRGB(70, 70, 70)
+            game.Lighting.FogEnd = 500
+            game.Lighting.FogStart = 100
+        end)
+        print("[杂乱] 画质已恢复")
+    end
+})
+
+Tabs.Misc:Divider()
+Tabs.Misc:Section({ Title = "人物属性" })
+
+local defaultSpeed = 16
+local defaultJump = 50
+
+Tabs.Misc:Slider({
+    Title = "人物移速",
+    Step = 1,
+    Value = { Min = 16, Max = 200, Default = 16 },
+    Callback = function(value)
+        defaultSpeed = value
+        local char = player.Character
+        if char then
+            local hum = char:FindFirstChildOfClass("Humanoid")
+            if hum then hum.WalkSpeed = value end
+        end
+    end
+})
+
+Tabs.Misc:Slider({
+    Title = "跳跃高度",
+    Step = 5,
+    Value = { Min = 50, Max = 500, Default = 50 },
+    Callback = function(value)
+        defaultJump = value
+        local char = player.Character
+        if char then
+            local hum = char:FindFirstChildOfClass("Humanoid")
+            if hum then
+                hum.UseJumpPower = true
+                hum.JumpPower = value
+            end
+        end
+    end
+})
+
+task.spawn(function()
+    while task.wait(1) do
+        local char = player.Character
+        if char then
+            local hum = char:FindFirstChildOfClass("Humanoid")
+            if hum then
+                if hum.WalkSpeed ~= defaultSpeed then hum.WalkSpeed = defaultSpeed end
+                if hum.UseJumpPower and hum.JumpPower ~= defaultJump then hum.JumpPower = defaultJump end
+            end
+        end
+    end
+end)
+
+Tabs.Misc:Divider()
+Tabs.Misc:Section({ Title = "跳跃功能" })
+
+local infiniteJumpEnabled = false
+local infiniteJumpConnection = nil
+
+Tabs.Misc:Toggle({
+    Title = "无限跳跃",
+    Default = false,
+    Callback = function(state)
+        infiniteJumpEnabled = state
+        if state then
+            if infiniteJumpConnection then infiniteJumpConnection:Disconnect() end
+            infiniteJumpConnection = game:GetService("UserInputService").JumpRequest:Connect(function()
+                if infiniteJumpEnabled then
+                    local char = player.Character
+                    if char then
+                        local hum = char:FindFirstChildOfClass("Humanoid")
+                        if hum then hum:ChangeState(Enum.HumanoidStateType.Jumping) end
+                    end
+                end
+            end)
+            print("[杂乱] 无限跳跃已开启")
+        else
+            if infiniteJumpConnection then
+                infiniteJumpConnection:Disconnect()
+                infiniteJumpConnection = nil
+            end
+            print("[杂乱] 无限跳跃已关闭")
+        end
+    end
+})
+
+Tabs.Misc:Divider()
+Tabs.Misc:Section({ Title = "攻击间隔" })
+
+local attackIntervalEnabled = false
+local attackConnection = nil
+
+Tabs.Misc:Toggle({
+    Title = "无攻击间隔（点多快挥多快）",
+    Default = false,
+    Callback = function(state)
+        attackIntervalEnabled = state
+        if state then
+            if attackConnection then attackConnection:Disconnect() end
+            attackConnection = RunService.Heartbeat:Connect(function()
+                if not attackIntervalEnabled then return end
+                if game:GetService("UserInputService"):IsMouseButtonPressed(Enum.UserInputType.MouseButton1) then
+                    local char = player.Character
+                    if char then
+                        local tool = char:FindFirstChildOfClass("Tool")
+                        if tool then
+                            pcall(function() tool:Activate() end)
+                        end
+                    end
+                end
+            end)
+            print("[杂乱] 无攻击间隔已开启")
+        else
+            if attackConnection then
+                attackConnection:Disconnect()
+                attackConnection = nil
+            end
+            print("[杂乱] 无攻击间隔已关闭")
+        end
+    end
+})
+
+-- 飞行功能（点击执行你的链接）
+Tabs.Misc:Divider()
+Tabs.Misc:Section({ Title = "飞行功能" })
+
+Tabs.Misc:Toggle({
+    Title = "飞行功能",
+    Default = false,
+    Callback = function(state)
+        if state then
+            loadstring(game:HttpGet("https://raw.githubusercontent.com/luauser729/bbb/main/shen.lua"))()
+            print("[杂乱] 飞行已开启")
+        else
+            print("[杂乱] 飞行已关闭")
+        end
+    end
+})
+
+-- ===== 设置 =====
+Tabs.Settings:Section({ Title = "边框设置" })
+
+Tabs.Settings:Paragraph({
+    Title = "边框颜色",
+    Desc = "选择一个颜色，边框流动效果会立即切换",
+})
+
+Tabs.Settings:Dropdown({
+    Title = "选择边框颜色",
+    Values = { "深蓝", "红色", "紫色", "绿色", "金色", "粉色", "青色" },
+    Value = { "深蓝" },
+    Multi = false,
+    AllowNone = false,
+    Callback = function(sel)
+        local colorName = sel[1] or "深蓝"
+        local theme = BorderThemes[colorName]
+        if theme then
+            currentTheme = theme
+            if Window and Window.UIElements and Window.UIElements.Main then
+                local stroke = Window.UIElements.Main:FindFirstChild("FlowBorder")
+                if stroke then
+                    local g = stroke:FindFirstChild("StreamEffect")
+                    if g then g.Color = theme end
+                end
+            end
+            print("[设置] 边框颜色已切换为：" .. colorName)
+        end
+    end
+})
+
+Window:SelectTab(1)
